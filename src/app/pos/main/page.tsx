@@ -12,6 +12,10 @@ const PRODUCTS: Product[] = []; // Replaced by dynamic state
 
 type CartItem = Product & { quantity: number };
 
+const BILLS = [100, 50, 20, 10, 5, 2, 1];
+const COINS = [1, 0.50, 0.25, 0.10, 0.05, 0.01];
+type Denominations = { [key: number]: number };
+
 export default function POSMain() {
     const [products, setProducts] = useState<Product[]>([]);
     const [cart, setCart] = useState<CartItem[]>([]);
@@ -19,7 +23,17 @@ export default function POSMain() {
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
     const [taxRate, setTaxRate] = useState<number>(0);
+
     const [userName, setUserName] = useState<string>('');
+    const [searchQuery, setSearchQuery] = useState('');
+
+    // Close Register State
+    const [isCloseRegisterOpen, setIsCloseRegisterOpen] = useState(false);
+    const [openingAmount, setOpeningAmount] = useState(0);
+    const [closingBillCounts, setClosingBillCounts] = useState<Denominations>({});
+    const [closingCoinCounts, setClosingCoinCounts] = useState<Denominations>({});
+    const [closingTotal, setClosingTotal] = useState(0);
+    const [sessionSales, setSessionSales] = useState(0);
 
     const router = useRouter();
 
@@ -46,6 +60,18 @@ export default function POSMain() {
         }
     }, []);
 
+    // Effect to calculate closing total
+    useEffect(() => {
+        let t = 0;
+        BILLS.forEach(bill => {
+            t += (closingBillCounts[bill] || 0) * bill;
+        });
+        COINS.forEach(coin => {
+            t += (closingCoinCounts[coin] || 0) * coin;
+        });
+        setClosingTotal(t);
+    }, [closingBillCounts, closingCoinCounts]);
+
     const subtotal = cart.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
     const taxAmount = subtotal * (taxRate / 100);
     const cartTotal = subtotal + taxAmount;
@@ -71,9 +97,60 @@ export default function POSMain() {
     const clearCart = () => setCart([]);
 
     const handleCloseRegister = async () => {
-        if (confirm('Are you sure you want to close the register?')) {
-            await fetch('/api/register/close', { method: 'POST' });
-            router.push('/');
+        if (cart.length > 0) {
+            if (!confirm('Cart is not empty. Closing register will clear the cart. Continue?')) return;
+        }
+
+        try {
+            const res = await fetch('/api/register/current');
+            const data = await res.json();
+            if (data.success) {
+                setOpeningAmount(Number(data.session.opening_amount));
+                setSessionSales(Number(data.session_sales || 0));
+                setIsCloseRegisterOpen(true);
+            } else {
+                alert('Could not fetch open register session.');
+            }
+        } catch (error) {
+            console.error('Failed to fetch register session', error);
+            alert('Failed to fetch register session');
+        }
+    };
+
+    const handleClosingBillChange = (value: number, count: string) => {
+        setClosingBillCounts(prev => ({ ...prev, [value]: parseInt(count) || 0 }));
+    };
+
+    const handleClosingCoinChange = (value: number, count: string) => {
+        setClosingCoinCounts(prev => ({ ...prev, [value]: parseInt(count) || 0 }));
+    };
+
+    const submitCloseRegister = async () => {
+        const details = {
+            bills: closingBillCounts,
+            coins: closingCoinCounts
+        };
+
+        try {
+            const res = await fetch('/api/register/close', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    closing_amount: closingTotal,
+                    closing_details: details
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                alert(`Register Closed Successfully!\n\nOpening Amount: $${openingAmount.toFixed(2)}\nTotal Counted: $${closingTotal.toFixed(2)}\nTakeout (Profit): $${(closingTotal - openingAmount).toFixed(2)}`);
+                router.push('/');
+            } else {
+                alert('Failed to close register: ' + data.message);
+            }
+        } catch (error) {
+            console.error('Failed to close register', error);
+            alert('Failed to close register');
         }
     };
 
@@ -87,8 +164,11 @@ export default function POSMain() {
     };
 
     const confirmPayment = async () => {
-        if (changeDue < 0) return alert('Insufficient amount tendered');
-        if (paymentMethod === 'card' && tendered > cartTotal) return alert('Card payment cannot exceed the total amount');
+        // Fix floating point precision issues by rounding to 2 decimals before checking
+        const roundedChange = parseFloat(changeDue.toFixed(2));
+
+        if (roundedChange < 0) return alert('Insufficient amount tendered');
+        if (paymentMethod === 'card' && roundedChange > 0) return alert('Card payment cannot exceed the total amount');
 
         try {
             const transactionData = {
@@ -125,14 +205,24 @@ export default function POSMain() {
     return (
         <div className="flex flex-col h-screen bg-gray-100">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 bg-white shadow-sm border-b">
-                <div className="flex items-center space-x-4">
-                    <h1 className="text-xl font-bold text-gray-800">POS System</h1>
+            <div className="flex items-center justify-between px-6 py-4 bg-white shadow-sm border-b z-10 relative">
+                <div className="flex items-center space-x-4 flex-1">
+                    <h1 className="text-xl font-bold text-gray-800 shrink-0">POS System</h1>
                     {userName && (
-                        <span className="px-3 py-1 text-sm font-medium text-blue-800 bg-blue-100 rounded-full">
+                        <span className="px-3 py-1 text-sm font-medium text-blue-800 bg-blue-100 rounded-full shrink-0">
                             {userName}
                         </span>
                     )}
+                    {/* Search Bar */}
+                    <div className="mx-4 flex-1 max-w-md">
+                        <input
+                            type="text"
+                            placeholder="Search products..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                    </div>
                 </div>
                 <div className="space-x-4">
                     <button onClick={handleLogout} className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium">
@@ -149,16 +239,23 @@ export default function POSMain() {
                 <div className="w-2/3 p-6 overflow-y-auto">
                     <h2 className="mb-4 text-lg font-semibold text-gray-700">Products</h2>
                     <div className="grid grid-cols-3 gap-4">
-                        {products.map(product => (
-                            <button
-                                key={product.id}
-                                onClick={() => addToCart(product)}
-                                className="p-6 text-center transition bg-white rounded-lg shadow hover:shadow-md active:bg-blue-50"
-                            >
-                                <div className="text-lg font-medium text-gray-800">{product.name}</div>
-                                <div className="text-gray-500">${Number(product.price).toFixed(2)}</div>
-                            </button>
-                        ))}
+                        {products
+                            .filter(product => product.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                            .map(product => (
+                                <button
+                                    key={product.id}
+                                    onClick={() => addToCart(product)}
+                                    className="p-6 text-center transition bg-white rounded-lg shadow hover:shadow-md active:bg-blue-50 flex flex-col items-center justify-center h-full min-h-[120px]"
+                                >
+                                    <div className="text-lg font-medium text-gray-800 mb-2">{product.name}</div>
+                                    <div className="text-gray-500 font-semibold">${Number(product.price).toFixed(2)}</div>
+                                </button>
+                            ))}
+                        {products.filter(product => product.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                            <div className="col-span-3 text-center py-10 text-gray-500">
+                                No products found matching "{searchQuery}"
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -276,9 +373,9 @@ export default function POSMain() {
 
                             <div className="flex justify-between p-4 rounded bg-gray-50">
                                 <span className="font-medium text-gray-700">Change Due:</span>
-                                <span className={`text-xl font-bold ${changeDue < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                <span className={`text-xl font-bold ${parseFloat(changeDue.toFixed(2)) < 0 ? 'text-red-600' : 'text-green-600'}`}>
                                     ${Math.max(0, changeDue).toFixed(2)}
-                                    {changeDue < 0 && <span className="text-sm font-normal text-red-500 block"> (Insufficient)</span>}
+                                    {parseFloat(changeDue.toFixed(2)) < 0 && <span className="text-sm font-normal text-red-500 block"> (Insufficient)</span>}
                                 </span>
                             </div>
                         </div>
@@ -292,7 +389,7 @@ export default function POSMain() {
                             </button>
                             <button
                                 onClick={confirmPayment}
-                                disabled={changeDue < 0}
+                                disabled={parseFloat(changeDue.toFixed(2)) < 0}
                                 className="flex-1 py-3 font-bold text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50"
                             >
                                 Complete Payment
@@ -302,7 +399,101 @@ export default function POSMain() {
                 </div>
             )}
 
+            {/* Close Register Modal */}
+            {
+                isCloseRegisterOpen && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+                        <div className="w-full max-w-4xl max-h-[90vh] p-8 bg-white rounded-lg shadow-2xl overflow-y-auto">
+                            <div className="flex justify-between items-center mb-6 border-b pb-4">
+                                <h2 className="text-3xl font-bold text-gray-800">Close Register</h2>
+                                <button onClick={() => setIsCloseRegisterOpen(false)} className="text-gray-500 hover:text-gray-700">
+                                    <span className="text-2xl">&times;</span>
+                                </button>
+                            </div>
 
-        </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+                                {/* Bills */}
+                                <div>
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-4">Bills</h3>
+                                    <div className="space-y-3">
+                                        {BILLS.map(bill => (
+                                            <div key={`close-bill-${bill}`} className="flex items-center justify-between">
+                                                <label className="w-24 font-medium text-gray-700">${bill}</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    placeholder="Count"
+                                                    className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-red-500"
+                                                    onChange={(e) => handleClosingBillChange(bill, e.target.value)}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Coins */}
+                                <div>
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-4">Coins</h3>
+                                    <div className="space-y-3">
+                                        {COINS.map(coin => (
+                                            <div key={`close-coin-${coin}`} className="flex items-center justify-between">
+                                                <label className="w-24 font-medium text-gray-700">
+                                                    {coin >= 1 ? `$${coin}` : `${(coin * 100).toFixed(0)}¢`}
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    placeholder="Count"
+                                                    className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-red-500"
+                                                    onChange={(e) => handleClosingCoinChange(coin, e.target.value)}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-gray-50 p-6 rounded-lg border-t space-y-3">
+                                <div className="flex justify-between text-lg">
+                                    <span className="text-gray-600">Opening Amount:</span>
+                                    <span className="font-semibold">${openingAmount.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-lg">
+                                    <span className="text-gray-600">Total Sales (Since Open):</span>
+                                    <span className="font-semibold text-blue-600">${sessionSales.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-lg">
+                                    <span className="text-gray-600">Total Counted:</span>
+                                    <span className="font-bold text-blue-600">${closingTotal.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-xl pt-2 border-t border-gray-200">
+                                    <span className="font-bold text-gray-800">Register Takeout (Profit):</span>
+                                    <span className={`font-bold ${(closingTotal - openingAmount) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        ${(closingTotal - openingAmount).toFixed(2)}
+                                    </span>
+                                </div>
+
+                                <div className="flex space-x-4 mt-6 pt-4">
+                                    <button
+                                        onClick={() => setIsCloseRegisterOpen(false)}
+                                        className="flex-1 py-3 font-medium text-gray-700 bg-gray-200 rounded hover:bg-gray-300"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={submitCloseRegister}
+                                        className="flex-1 py-3 font-bold text-white bg-red-600 rounded hover:bg-red-700 shadow-md"
+                                    >
+                                        Post Sale & Close Register
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+
+        </div >
     );
 }
