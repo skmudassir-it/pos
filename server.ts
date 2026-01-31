@@ -67,6 +67,26 @@ app.prepare().then(() => {
                 )
             `);
 
+            await db.query(`
+                CREATE TABLE IF NOT EXISTS users (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(50) NOT NULL UNIQUE,
+                    password VARCHAR(255) NOT NULL,
+                    role ENUM('admin', 'user') NOT NULL DEFAULT 'user',
+                    name VARCHAR(100)
+                )
+            `);
+
+            // Seed initial admin user if table is empty
+            const [users] = await db.query('SELECT count(*) as count FROM users');
+            if ((users as any[])[0].count === 0) {
+                const adminUser = process.env.ADMIN_USER || 'admin';
+                const adminPass = process.env.ADMIN_PASS || 'admin123';
+                await db.query('INSERT INTO users (username, password, role, name) VALUES (?, ?, ?, ?)',
+                    [adminUser, adminPass, 'admin', 'Administrator']);
+                console.log('Admin user seeded');
+            }
+
             // Migration for existing tables
             try {
                 await db.query("ALTER TABLE transactions ADD COLUMN subtotal DECIMAL(10,2) DEFAULT 0");
@@ -86,21 +106,34 @@ app.prepare().then(() => {
     let isRegisterOpen = false;
 
     // Login APIs
-    server.post('/api/login/admin', (req: Request, res: Response) => {
+    // Login APIs (DB)
+    server.post('/api/login/admin', async (req: Request, res: Response) => {
         const { username, password } = req.body;
-        if (username === process.env.ADMIN_USER && password === process.env.ADMIN_PASS) {
-            res.json({ success: true, role: 'admin' });
-        } else {
-            res.status(401).json({ success: false, message: 'Invalid admin credentials' });
+        try {
+            const [rows] = await db.query('SELECT * FROM users WHERE username = ? AND password = ? AND role = ?', [username, password, 'admin']);
+            if ((rows as any[]).length > 0) {
+                res.json({ success: true, role: 'admin', user: (rows as any[])[0] });
+            } else {
+                res.status(401).json({ success: false, message: 'Invalid admin credentials' });
+            }
+        } catch (err) {
+            console.error('Admin login error:', err);
+            res.status(500).json({ error: 'Login failed' });
         }
     });
 
-    server.post('/api/login/user', (req: Request, res: Response) => {
+    server.post('/api/login/user', async (req: Request, res: Response) => {
         const { username, password } = req.body;
-        if (username === process.env.USER_USER && password === process.env.USER_PASS) {
-            res.json({ success: true, role: 'user' });
-        } else {
-            res.status(401).json({ success: false, message: 'Invalid user credentials' });
+        try {
+            const [rows] = await db.query('SELECT * FROM users WHERE username = ? AND password = ? AND role = ?', [username, password, 'user']);
+            if ((rows as any[]).length > 0) {
+                res.json({ success: true, role: 'user', user: (rows as any[])[0] });
+            } else {
+                res.status(401).json({ success: false, message: 'Invalid user credentials' });
+            }
+        } catch (err) {
+            console.error('User login error:', err);
+            res.status(500).json({ error: 'Login failed' });
         }
     });
 
@@ -179,6 +212,63 @@ app.prepare().then(() => {
         } catch (err) {
             console.error('Update tax rate error:', err);
             res.status(500).json({ error: 'Failed to update tax rate' });
+        }
+    });
+
+    // User Management APIs
+    server.get('/api/users', async (req: Request, res: Response) => {
+        try {
+            const [rows] = await db.query('SELECT id, username, role, name FROM users');
+            res.json(rows);
+        } catch (err) {
+            console.error('Fetch users error:', err);
+            res.status(500).json({ error: 'Failed to fetch users' });
+        }
+    });
+
+    server.post('/api/users', async (req: Request, res: Response) => {
+        const { username, password, role, name } = req.body;
+        try {
+            const [result] = await db.query(
+                'INSERT INTO users (username, password, role, name) VALUES (?, ?, ?, ?)',
+                [username, password, role, name]
+            );
+            res.json({ success: true, id: (result as any).insertId });
+        } catch (err) {
+            console.error('Create user error:', err);
+            res.status(500).json({ error: 'Failed to create user' });
+        }
+    });
+
+    server.put('/api/users/:id', async (req: Request, res: Response) => {
+        const { id } = req.params;
+        const { username, password, role, name } = req.body;
+        try {
+            let query = 'UPDATE users SET username = ?, role = ?, name = ?';
+            const params = [username, role, name];
+            if (password) {
+                query += ', password = ?';
+                params.push(password);
+            }
+            query += ' WHERE id = ?';
+            params.push(id);
+
+            await db.query(query, params);
+            res.json({ success: true });
+        } catch (err) {
+            console.error('Update user error:', err);
+            res.status(500).json({ error: 'Failed to update user' });
+        }
+    });
+
+    server.delete('/api/users/:id', async (req: Request, res: Response) => {
+        const { id } = req.params;
+        try {
+            await db.query('DELETE FROM users WHERE id = ?', [id]);
+            res.json({ success: true });
+        } catch (err) {
+            console.error('Delete user error:', err);
+            res.status(500).json({ error: 'Failed to delete user' });
         }
     });
 

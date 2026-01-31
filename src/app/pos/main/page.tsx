@@ -19,6 +19,8 @@ export default function POSMain() {
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
     const [taxRate, setTaxRate] = useState<number>(0);
+    const [userName, setUserName] = useState<string>('');
+
     const router = useRouter();
 
     useEffect(() => {
@@ -31,11 +33,23 @@ export default function POSMain() {
             .then(res => res.json())
             .then(data => setTaxRate(data.rate || 0))
             .catch(err => console.error('Failed to load tax rate', err));
+
+        // Load user from local storage
+        const storedUser = localStorage.getItem('pos_user');
+        if (storedUser) {
+            try {
+                const user = JSON.parse(storedUser);
+                setUserName(user.name || user.username);
+            } catch (e) {
+                console.error('Failed to parse user', e);
+            }
+        }
     }, []);
 
     const subtotal = cart.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
     const taxAmount = subtotal * (taxRate / 100);
     const cartTotal = subtotal + taxAmount;
+    const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
 
     const tendered = parseFloat(amountTendered) || 0;
     const changeDue = tendered - cartTotal;
@@ -77,22 +91,27 @@ export default function POSMain() {
         if (paymentMethod === 'card' && tendered > cartTotal) return alert('Card payment cannot exceed the total amount');
 
         try {
-            const totalQty = cart.reduce((acc, item) => acc + item.quantity, 0);
+            const transactionData = {
+                receiptNo: `REC-${Date.now()}`,
+                date: new Date(),
+                qty: totalQty,
+                total: cartTotal,
+                subtotal: subtotal,
+                tax: taxAmount,
+                method: paymentMethod,
+                items: [...cart],
+                changeDue: changeDue,
+                amountTendered: tendered
+            };
 
             await fetch('/api/transactions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    qty: totalQty,
-                    total: cartTotal,
-                    subtotal: subtotal,
-                    tax: taxAmount,
-                    method: paymentMethod,
-                    items: cart
-                })
+                body: JSON.stringify(transactionData)
             });
 
             alert(`Payment Successful via ${paymentMethod.toUpperCase()}! Change due: $${changeDue.toFixed(2)}`);
+
             setCart([]);
             setAmountTendered('');
             setPaymentMethod('cash');
@@ -107,7 +126,14 @@ export default function POSMain() {
         <div className="flex flex-col h-screen bg-gray-100">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 bg-white shadow-sm border-b">
-                <h1 className="text-xl font-bold text-gray-800">POS System</h1>
+                <div className="flex items-center space-x-4">
+                    <h1 className="text-xl font-bold text-gray-800">POS System</h1>
+                    {userName && (
+                        <span className="px-3 py-1 text-sm font-medium text-blue-800 bg-blue-100 rounded-full">
+                            {userName}
+                        </span>
+                    )}
+                </div>
                 <div className="space-x-4">
                     <button onClick={handleLogout} className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium">
                         Logout
@@ -275,6 +301,8 @@ export default function POSMain() {
                     </div>
                 </div>
             )}
+
+
         </div>
     );
 }

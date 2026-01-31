@@ -17,6 +17,9 @@ export default function UserLogin() {
         });
         const data = await res.json();
         if (data.success) {
+            // Save user to local storage for display in POS
+            localStorage.setItem('pos_user', JSON.stringify(data.user || { name: username }));
+
             // Check register status
             const statusRes = await fetch('/api/register/status');
             const statusInfo = await statusRes.json();
