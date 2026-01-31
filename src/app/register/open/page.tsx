@@ -22,6 +22,47 @@ export default function OpenRegister() {
     };
 
     useEffect(() => {
+        const fetchInitialAmount = async () => {
+            try {
+                const res = await fetch('/api/settings/register-amount');
+                const data = await res.json();
+                if (data.amount > 0) {
+                    fillDenominations(data.amount);
+                }
+            } catch (error) {
+                console.error('Failed to fetch initial amount', error);
+            }
+        };
+        fetchInitialAmount();
+    }, []);
+
+    const fillDenominations = (amount: number) => {
+        let remaining = Math.round(amount * 100); // work in cents
+        const newBillCounts: Denominations = {};
+        const newCoinCounts: Denominations = {};
+
+        BILLS.forEach(bill => {
+            const billCents = Math.round(bill * 100);
+            if (remaining >= billCents) {
+                const count = Math.floor(remaining / billCents);
+                newBillCounts[bill] = count;
+                remaining -= count * billCents;
+            }
+        });
+
+        COINS.forEach(coin => {
+            const coinCents = Math.round(coin * 100);
+            if (remaining >= coinCents) {
+                const count = Math.floor(remaining / coinCents);
+                newCoinCounts[coin] = count;
+                remaining -= count * coinCents;
+            }
+        });
+
+        setBillCounts(newBillCounts);
+        setCoinCounts(newCoinCounts);
+    };
+    useEffect(() => {
         let t = 0;
         BILLS.forEach(bill => {
             t += (billCounts[bill] || 0) * bill;
@@ -73,6 +114,7 @@ export default function OpenRegister() {
                                         type="number"
                                         min="0"
                                         placeholder="Count"
+                                        value={billCounts[bill] || ''}
                                         className="w-full px-3 py-2 text-gray-900 border rounded focus:ring-2 focus:ring-blue-500"
                                         onChange={(e) => handleBillChange(bill, e.target.value)}
                                     />
@@ -94,6 +136,7 @@ export default function OpenRegister() {
                                         type="number"
                                         min="0"
                                         placeholder="Count"
+                                        value={coinCounts[coin] || ''}
                                         className="w-full px-3 py-2 text-gray-900 border rounded focus:ring-2 focus:ring-blue-500"
                                         onChange={(e) => handleCoinChange(coin, e.target.value)}
                                     />

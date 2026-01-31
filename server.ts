@@ -46,19 +46,7 @@ app.prepare().then(() => {
                     items JSON
                 )
             `);
-            await db.query(`
-                CREATE TABLE IF NOT EXISTS transactions (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    receipt_no VARCHAR(50) NOT NULL,
-                    date DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    qty INT NOT NULL,
-                    total DECIMAL(10,2) NOT NULL,
-                    subtotal DECIMAL(10,2) DEFAULT 0,
-                    tax DECIMAL(10,2) DEFAULT 0,
-                    method VARCHAR(10) NOT NULL,
-                    items JSON
-                )
-            `);
+
 
             await db.query(`
                 CREATE TABLE IF NOT EXISTS settings (
@@ -74,6 +62,19 @@ app.prepare().then(() => {
                     password VARCHAR(255) NOT NULL,
                     role ENUM('admin', 'user') NOT NULL DEFAULT 'user',
                     name VARCHAR(100)
+                )
+            `);
+
+            await db.query(`
+                CREATE TABLE IF NOT EXISTS register_sessions (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    closed_at DATETIME,
+                    opening_amount DECIMAL(10,2) NOT NULL,
+                    closing_amount DECIMAL(10,2),
+                    opening_details JSON,
+                    closing_details JSON,
+                    status ENUM('open', 'closed') DEFAULT 'open'
                 )
             `);
 
@@ -138,21 +139,84 @@ app.prepare().then(() => {
     });
 
     // Register APIs
-    server.get('/api/register/status', (req: Request, res: Response) => {
-        res.json({ isOpen: isRegisterOpen });
+    server.get('/api/register/status', async (req: Request, res: Response) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM register_sessions WHERE status = "open" ORDER BY opened_at DESC LIMIT 1');
+            const isOpen = (rows as any[]).length > 0;
+            res.json({ isOpen });
+        } catch (err) {
+            console.error('Check register status error:', err);
+            // Fallback to false if DB fails, or handle appropriately
+            res.json({ isOpen: false });
+        }
     });
 
-    server.post('/api/register/open', (req: Request, res: Response) => {
+    server.get('/api/register/current', async (req: Request, res: Response) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM register_sessions WHERE status = "open" ORDER BY opened_at DESC LIMIT 1');
+            if ((rows as any[]).length > 0) {
+                const session = (rows as any[])[0];
+
+                // Calculate total sales for this session
+                const [salesRows] = await db.query(
+                    'SELECT SUM(total) as total_sales FROM transactions WHERE date >= ?',
+                    [session.opened_at]
+                );
+                const totalSales = (salesRows as any[])[0]?.total_sales || 0;
+
+                res.json({ success: true, session, session_sales: parseFloat(totalSales) });
+            } else {
+                res.status(404).json({ success: false, message: 'No open register session found' });
+            }
+        } catch (err) {
+            console.error('Fetch current register error:', err);
+            res.status(500).json({ error: 'Failed to fetch current register' });
+        }
+    });
+
+    server.post('/api/register/open', async (req: Request, res: Response) => {
         const { total, details } = req.body;
-        isRegisterOpen = true; // Still in-memory for session status
-        console.log('Register Opened:', { total, details, timestamp: new Date() });
-        res.json({ success: true, message: 'Register opened successfully', total });
+        try {
+            // Check if already open
+            const [rows] = await db.query('SELECT * FROM register_sessions WHERE status = "open" LIMIT 1');
+            if ((rows as any[]).length > 0) {
+                return res.status(400).json({ success: false, message: 'Register is already open' });
+            }
+
+            await db.query(
+                'INSERT INTO register_sessions (opening_amount, opening_details, status) VALUES (?, ?, ?)',
+                [total, JSON.stringify(details), 'open']
+            );
+            isRegisterOpen = true; // Keep for now for legacy compatibility if needed, but rely on DB
+            console.log('Register Opened (DB):', { total, timestamp: new Date() });
+            res.json({ success: true, message: 'Register opened successfully', total });
+        } catch (err) {
+            console.error('Open register error:', err);
+            res.status(500).json({ error: 'Failed to open register' });
+        }
     });
 
-    server.post('/api/register/close', (req: Request, res: Response) => {
-        isRegisterOpen = false;
-        console.log('Register Closed:', { timestamp: new Date() });
-        res.json({ success: true, message: 'Register closed successfully' });
+    server.post('/api/register/close', async (req: Request, res: Response) => {
+        const { closing_amount, closing_details } = req.body;
+        try {
+            const [rows] = await db.query('SELECT id FROM register_sessions WHERE status = "open" ORDER BY opened_at DESC LIMIT 1');
+            if ((rows as any[]).length === 0) {
+                return res.status(400).json({ success: false, message: 'No open register session to close' });
+            }
+            const sessionId = (rows as any[])[0].id;
+
+            await db.query(
+                'UPDATE register_sessions SET closing_amount = ?, closing_details = ?, status = ?, closed_at = CURRENT_TIMESTAMP WHERE id = ?',
+                [closing_amount, JSON.stringify(closing_details), 'closed', sessionId]
+            );
+
+            isRegisterOpen = false;
+            console.log('Register Closed (DB):', { sessionId, closing_amount, timestamp: new Date() });
+            res.json({ success: true, message: 'Register closed successfully' });
+        } catch (err) {
+            console.error('Close register error:', err);
+            res.status(500).json({ error: 'Failed to close register' });
+        }
     });
 
     // Product APIs (DB)
@@ -212,6 +276,86 @@ app.prepare().then(() => {
         } catch (err) {
             console.error('Update tax rate error:', err);
             res.status(500).json({ error: 'Failed to update tax rate' });
+        }
+    });
+
+    server.get('/api/settings/register-amount', async (req: Request, res: Response) => {
+        try {
+            const [rows] = await db.query('SELECT setting_value FROM settings WHERE setting_key = ?', ['register_initial_amount']);
+            const amount = (rows as any[])[0]?.setting_value || '0';
+            res.json({ amount: parseFloat(amount) });
+        } catch (err) {
+            console.error('Fetch register amount error:', err);
+            res.status(500).json({ error: 'Failed to fetch register amount' });
+        }
+    });
+
+    server.post('/api/settings/register-amount', async (req: Request, res: Response) => {
+        const { amount } = req.body;
+        try {
+            await db.query(
+                'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+                ['register_initial_amount', amount.toString(), amount.toString()]
+            );
+            res.json({ success: true, amount });
+        } catch (err) {
+            console.error('Update register amount error:', err);
+            res.status(500).json({ error: 'Failed to update register amount' });
+        }
+    });
+
+    // Analytics APIs
+    server.get('/api/analytics/sales', async (req: Request, res: Response) => {
+        const { startDate, endDate } = req.query;
+        try {
+            let query = 'SELECT * FROM transactions WHERE 1=1';
+            const params: any[] = [];
+
+            if (startDate) {
+                query += ' AND date >= ?';
+                params.push(startDate); // Expecting YYYY-MM-DD or datetime
+            }
+            if (endDate) {
+                query += ' AND date <= ?';
+                // Add time to end date to cover the full day if just date is provided
+                const endDateTime = (endDate as string).includes(' ') ? endDate : `${endDate} 23:59:59`;
+                params.push(endDateTime);
+            }
+
+            query += ' ORDER BY date DESC';
+
+            const [rows] = await db.query(query, params);
+            res.json({ success: true, data: rows });
+        } catch (err) {
+            console.error('Analytics Fetch Error:', err);
+            res.status(500).json({ error: 'Failed to fetch analytics data' });
+        }
+    });
+
+    // Reports APIs
+    server.get('/api/reports/register-sessions', async (req: Request, res: Response) => {
+        const { startDate, endDate } = req.query;
+        try {
+            let query = 'SELECT * FROM register_sessions WHERE 1=1';
+            const params: any[] = [];
+
+            if (startDate) {
+                query += ' AND opened_at >= ?';
+                params.push(startDate);
+            }
+            if (endDate) {
+                query += ' AND opened_at <= ?';
+                const endDateTime = (endDate as string).includes(' ') ? endDate : `${endDate} 23:59:59`;
+                params.push(endDateTime);
+            }
+
+            query += ' ORDER BY opened_at DESC';
+
+            const [rows] = await db.query(query, params);
+            res.json({ success: true, data: rows });
+        } catch (err) {
+            console.error('Reports Fetch Error:', err);
+            res.status(500).json({ error: 'Failed to fetch register sessions' });
         }
     });
 
