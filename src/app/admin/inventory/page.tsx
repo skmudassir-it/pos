@@ -70,7 +70,7 @@ export default function InventoryManager() {
                                 placeholder="Product Name"
                                 value={newName}
                                 onChange={(e) => setNewName(e.target.value)}
-                                className="w-full px-4 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full px-4 py-2 text-gray-900 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
                             />
                         </div>
                         <div className="w-32">
@@ -80,7 +80,7 @@ export default function InventoryManager() {
                                 placeholder="Price"
                                 value={newPrice}
                                 onChange={(e) => setNewPrice(e.target.value)}
-                                className="w-full px-4 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full px-4 py-2 text-gray-900 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
                             />
                         </div>
                         <button
@@ -109,7 +109,7 @@ export default function InventoryManager() {
                                 <tr key={product.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 text-sm text-gray-500">#{product.id}</td>
                                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{product.name}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-900">${product.price.toFixed(2)}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-900">${Number(product.price).toFixed(2)}</td>
                                     <td className="px-6 py-4 text-sm">
                                         <button
                                             onClick={() => handleDeleteProduct(product.id)}

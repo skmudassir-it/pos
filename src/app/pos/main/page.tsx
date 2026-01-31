@@ -18,6 +18,7 @@ export default function POSMain() {
     const [amountTendered, setAmountTendered] = useState<string>('');
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
+    const [taxRate, setTaxRate] = useState<number>(0);
     const router = useRouter();
 
     useEffect(() => {
@@ -25,9 +26,17 @@ export default function POSMain() {
             .then(res => res.json())
             .then(data => setProducts(data))
             .catch(err => console.error('Failed to load products', err));
+
+        fetch('/api/settings/tax')
+            .then(res => res.json())
+            .then(data => setTaxRate(data.rate || 0))
+            .catch(err => console.error('Failed to load tax rate', err));
     }, []);
 
-    const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const subtotal = cart.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
+    const taxAmount = subtotal * (taxRate / 100);
+    const cartTotal = subtotal + taxAmount;
+
     const tendered = parseFloat(amountTendered) || 0;
     const changeDue = tendered - cartTotal;
 
@@ -76,6 +85,8 @@ export default function POSMain() {
                 body: JSON.stringify({
                     qty: totalQty,
                     total: cartTotal,
+                    subtotal: subtotal,
+                    tax: taxAmount,
                     method: paymentMethod,
                     items: cart
                 })
@@ -119,7 +130,7 @@ export default function POSMain() {
                                 className="p-6 text-center transition bg-white rounded-lg shadow hover:shadow-md active:bg-blue-50"
                             >
                                 <div className="text-lg font-medium text-gray-800">{product.name}</div>
-                                <div className="text-gray-500">${product.price.toFixed(2)}</div>
+                                <div className="text-gray-500">${Number(product.price).toFixed(2)}</div>
                             </button>
                         ))}
                     </div>
@@ -137,10 +148,10 @@ export default function POSMain() {
                                     <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
                                         <div>
                                             <div className="font-medium text-gray-800">{item.name}</div>
-                                            <div className="text-sm text-gray-500">${item.price.toFixed(2)} x {item.quantity}</div>
+                                            <div className="text-sm text-gray-800 font-medium">${Number(item.price).toFixed(2)} x {item.quantity}</div>
                                         </div>
                                         <div className="flex items-center space-x-3">
-                                            <span className="font-medium">${(item.price * item.quantity).toFixed(2)}</span>
+                                            <span className="font-bold text-gray-900">${(Number(item.price) * item.quantity).toFixed(2)}</span>
                                             <button onClick={() => removeFromCart(item.id)} className="text-red-500 hover:text-red-700">&times;</button>
                                         </div>
                                     </div>
@@ -149,8 +160,16 @@ export default function POSMain() {
                         )}
                     </div>
 
-                    <div className="p-6 bg-gray-50 border-t">
-                        <div className="flex items-center justify-between mb-4 text-xl font-bold text-gray-800">
+                    <div className="p-6 bg-gray-50 border-t space-y-2">
+                        <div className="flex items-center justify-between text-sm text-gray-600">
+                            <span>Subtotal</span>
+                            <span>${subtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm text-gray-600">
+                            <span>Tax ({taxRate}%)</span>
+                            <span>${taxAmount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex items-center justify-between mb-4 text-xl font-bold text-gray-800 pt-2 border-t">
                             <span>Total</span>
                             <span>${cartTotal.toFixed(2)}</span>
                         </div>
@@ -172,8 +191,16 @@ export default function POSMain() {
                         <h2 className="mb-6 text-2xl font-bold text-gray-800">Payment</h2>
 
                         <div className="mb-6 space-y-4">
-                            <div className="flex justify-between text-lg">
-                                <span className="text-gray-600">Total Due:</span>
+                            <div className="flex justify-between text-lg border-b pb-4">
+                                <span className="text-gray-600">Subtotal:</span>
+                                <span className="font-medium">${subtotal.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-lg border-b pb-4">
+                                <span className="text-gray-600">Tax:</span>
+                                <span className="font-medium">${taxAmount.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-xl">
+                                <span className="text-gray-800 font-bold">Total Due:</span>
                                 <span className="font-bold text-gray-900">${cartTotal.toFixed(2)}</span>
                             </div>
 

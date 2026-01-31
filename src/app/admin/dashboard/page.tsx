@@ -18,6 +18,9 @@ export default function AdminDashboard() {
                 <Link href="/admin/users" className="px-6 py-4 text-lg font-medium text-center text-white bg-purple-600 rounded-lg hover:bg-purple-700 shadow-md">
                     Manage Users
                 </Link>
+                <Link href="/admin/settings" className="px-6 py-4 text-lg font-medium text-center text-white bg-gray-600 rounded-lg hover:bg-gray-700 shadow-md">
+                    Settings
+                </Link>
                 <Link href="/" className="px-6 py-4 text-lg font-medium text-center text-red-600 border border-red-600 rounded-lg hover:bg-red-50 mt-4">
                     Logout
                 </Link>

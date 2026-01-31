@@ -8,6 +8,8 @@ interface Transaction {
     date: string;
     qty: number;
     total: number;
+    subtotal?: number;
+    tax?: number;
     method: 'cash' | 'card';
 }
 
@@ -105,7 +107,9 @@ export default function SalesManager() {
                                 <th className="px-6 py-3 text-xs font-medium tracking-wider text-gray-500 uppercase border-b">Receipt No</th>
                                 <th className="px-6 py-3 text-xs font-medium tracking-wider text-gray-500 uppercase border-b">Date & Time</th>
                                 <th className="px-6 py-3 text-xs font-medium tracking-wider text-gray-500 uppercase border-b">Qty</th>
-                                <th className="px-6 py-3 text-xs font-medium tracking-wider text-gray-500 uppercase border-b">Total Price</th>
+                                <th className="px-6 py-3 text-xs font-medium tracking-wider text-gray-500 uppercase border-b">Subtotal</th>
+                                <th className="px-6 py-3 text-xs font-medium tracking-wider text-gray-500 uppercase border-b">Tax</th>
+                                <th className="px-6 py-3 text-xs font-medium tracking-wider text-gray-500 uppercase border-b">Total</th>
                                 <th className="px-6 py-3 text-xs font-medium tracking-wider text-gray-500 uppercase border-b">Method</th>
                             </tr>
                         </thead>
@@ -126,7 +130,9 @@ export default function SalesManager() {
                                             {new Date(t.date).toLocaleDateString()} {new Date(t.date).toLocaleTimeString()}
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-900">{t.qty}</td>
-                                        <td className="px-6 py-4 text-sm font-bold text-gray-900">${t.total.toFixed(2)}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-500">${Number(t.subtotal || t.total).toFixed(2)}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-500">${Number(t.tax || 0).toFixed(2)}</td>
+                                        <td className="px-6 py-4 text-sm font-bold text-gray-900">${Number(t.total).toFixed(2)}</td>
                                         <td className="px-6 py-4 text-sm text-gray-500">
                                             <span className={`px-2 py-1 text-xs font-semibold rounded-full ${t.method === 'card' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
                                                 }`}>

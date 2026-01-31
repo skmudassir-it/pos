@@ -46,6 +46,35 @@ app.prepare().then(() => {
                     items JSON
                 )
             `);
+            await db.query(`
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    receipt_no VARCHAR(50) NOT NULL,
+                    date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    qty INT NOT NULL,
+                    total DECIMAL(10,2) NOT NULL,
+                    subtotal DECIMAL(10,2) DEFAULT 0,
+                    tax DECIMAL(10,2) DEFAULT 0,
+                    method VARCHAR(10) NOT NULL,
+                    items JSON
+                )
+            `);
+
+            await db.query(`
+                CREATE TABLE IF NOT EXISTS settings (
+                    setting_key VARCHAR(50) PRIMARY KEY,
+                    setting_value VARCHAR(255)
+                )
+            `);
+
+            // Migration for existing tables
+            try {
+                await db.query("ALTER TABLE transactions ADD COLUMN subtotal DECIMAL(10,2) DEFAULT 0");
+            } catch (e) { /* Ignore if exists */ }
+            try {
+                await db.query("ALTER TABLE transactions ADD COLUMN tax DECIMAL(10,2) DEFAULT 0");
+            } catch (e) { /* Ignore if exists */ }
+
             console.log('Database initialized');
         } catch (err) {
             console.error('Database initialization failed:', err);
@@ -127,18 +156,44 @@ app.prepare().then(() => {
         }
     });
 
+    // Settings APIs
+    server.get('/api/settings/tax', async (req: Request, res: Response) => {
+        try {
+            const [rows] = await db.query('SELECT setting_value FROM settings WHERE setting_key = ?', ['tax_rate']);
+            const rate = (rows as any[])[0]?.setting_value || '0';
+            res.json({ rate: parseFloat(rate) });
+        } catch (err) {
+            console.error('Fetch tax rate error:', err);
+            res.status(500).json({ error: 'Failed to fetch tax rate' });
+        }
+    });
+
+    server.post('/api/settings/tax', async (req: Request, res: Response) => {
+        const { rate } = req.body;
+        try {
+            await db.query(
+                'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+                ['tax_rate', rate.toString(), rate.toString()]
+            );
+            res.json({ success: true, rate });
+        } catch (err) {
+            console.error('Update tax rate error:', err);
+            res.status(500).json({ error: 'Failed to update tax rate' });
+        }
+    });
+
     // Sales APIs (DB)
     server.post('/api/transactions', async (req: Request, res: Response) => {
-        const { receiptNo, date, qty, total, method, items } = req.body;
+        const { receiptNo, date, qty, total, subtotal, tax, method, items } = req.body;
         const rNo = receiptNo || `REC-${Date.now()}`;
         const d = date ? new Date(date) : new Date();
 
         try {
             const [result] = await db.query(
-                'INSERT INTO transactions (receipt_no, date, qty, total, method, items) VALUES (?, ?, ?, ?, ?, ?)',
-                [rNo, d, qty, total, method, JSON.stringify(items)]
+                'INSERT INTO transactions (receipt_no, date, qty, total, subtotal, tax, method, items) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [rNo, d, qty, total, subtotal || total, tax || 0, method, JSON.stringify(items)]
             );
-            const transaction = { id: (result as any).insertId, receiptNo: rNo, date: d, qty, total, method, items };
+            const transaction = { id: (result as any).insertId, receiptNo: rNo, date: d, qty, total, subtotal, tax, method, items };
             res.json({ success: true, transaction });
         } catch (err) {
             console.error('Record transaction error:', err);
@@ -169,6 +224,8 @@ app.prepare().then(() => {
                 date: row.date,
                 qty: row.qty,
                 total: row.total,
+                subtotal: row.subtotal,
+                tax: row.tax,
                 method: row.method,
                 items: row.items // mysql2 parsing JSON automatically? usually returns object if column type is JSON
             }));
