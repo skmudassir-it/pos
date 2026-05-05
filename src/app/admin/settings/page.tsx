@@ -1,9 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function SettingsPage() {
-    const router = useRouter();
     const [taxRate, setTaxRate] = useState<string>('0');
     const [initialAmount, setInitialAmount] = useState<string>('0');
     const [loading, setLoading] = useState(true);
@@ -60,19 +58,10 @@ export default function SettingsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 p-8">
-            <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-bold text-gray-800">System Settings</h1>
-                    <button
-                        onClick={() => router.push('/admin/dashboard')}
-                        className="text-blue-600 hover:underline"
-                    >
-                        Back to Dashboard
-                    </button>
-                </div>
+        <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
+            <h1 className="text-2xl font-bold text-gray-800 mb-6">System Settings</h1>
 
-                {loading ? (
+            {loading ? (
                     <div className="text-gray-500">Loading settings...</div>
                 ) : (
                     <div className="space-y-6">
@@ -128,8 +117,7 @@ export default function SettingsPage() {
                             {saving ? 'Saving...' : 'Save Settings'}
                         </button>
                     </div>
-                )}
-            </div>
+            )}
         </div>
     );
 }

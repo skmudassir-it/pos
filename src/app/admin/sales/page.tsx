@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     PieChart, Pie, Cell
@@ -18,7 +17,6 @@ type Transaction = {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
 export default function SalesManager() {
-    const router = useRouter();
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -77,17 +75,8 @@ export default function SalesManager() {
     }));
 
     return (
-        <div className="min-h-screen bg-gray-50 p-8">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-8">
-                <h1 className="text-3xl font-bold text-gray-900">Sales Manager</h1>
-                <button
-                    onClick={() => router.push('/admin/dashboard')}
-                    className="px-4 py-2 text-gray-700 bg-white border rounded hover:bg-gray-100"
-                >
-                    Back to Dashboard
-                </button>
-            </div>
+        <div className="p-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-8">Sales Manager</h1>
 
             {/* Filters */}
             <div className="bg-white p-6 rounded-lg shadow mb-8 flex flex-wrap gap-6 items-end">

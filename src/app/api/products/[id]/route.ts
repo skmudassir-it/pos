@@ -2,6 +2,25 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { ResultSetHeader } from 'mysql2';
 
+export async function PUT(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params;
+        const body = await req.json();
+        const { name, price } = body;
+        await pool.query<ResultSetHeader>(
+            'UPDATE products SET name = ?, price = ? WHERE id = ?',
+            [name, price, id]
+        );
+        return NextResponse.json({ success: true });
+    } catch (err) {
+        console.error('Update product error:', err);
+        return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
+    }
+}
+
 export async function DELETE(
     req: Request,
     { params }: { params: Promise<{ id: string }> }

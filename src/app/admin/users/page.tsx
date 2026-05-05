@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 
 interface User {
     id: number;
@@ -10,7 +9,6 @@ interface User {
 }
 
 export default function ManageUsers() {
-    const router = useRouter();
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -106,19 +104,10 @@ export default function ManageUsers() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 p-8">
-            <div className="max-w-6xl mx-auto">
-                <div className="flex items-center justify-between mb-8">
-                    <h1 className="text-3xl font-bold text-gray-800">Manage Users</h1>
-                    <button
-                        onClick={() => router.push('/admin/dashboard')}
-                        className="px-4 py-2 text-gray-600 bg-white border rounded hover:bg-gray-50"
-                    >
-                        Back to Dashboard
-                    </button>
-                </div>
+        <div className="max-w-6xl mx-auto p-8">
+            <h1 className="text-3xl font-bold text-gray-800 mb-8">Manage Users</h1>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     {/* User Form */}
                     <div className="md:col-span-1">
                         <div className="p-6 bg-white rounded-lg shadow-sm">
@@ -237,7 +226,6 @@ export default function ManageUsers() {
                                 </tbody>
                             </table>
                         </div>
-                    </div>
                 </div>
             </div>
         </div>

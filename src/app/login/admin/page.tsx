@@ -1,6 +1,7 @@
 "use client";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function AdminLogin() {
     const [username, setUsername] = useState('');
@@ -27,6 +28,7 @@ export default function AdminLogin() {
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-100">
             <div className="p-8 bg-white rounded-lg shadow-md w-96">
+                <Link href="/" className="text-sm text-blue-600 hover:underline mb-4 inline-block">← Back to Home</Link>
                 <h1 className="mb-6 text-2xl font-bold text-center text-gray-800">Admin Login</h1>
                 {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
                 <form onSubmit={handleLogin} className="space-y-4">

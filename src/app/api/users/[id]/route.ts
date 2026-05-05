@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import pool, { hashPassword } from '@/lib/db';
 import { ResultSetHeader } from 'mysql2';
 
 export async function PUT(
@@ -15,8 +15,9 @@ export async function PUT(
         const queryParams: any[] = [username, role, name];
 
         if (password) {
+            const hashed = await hashPassword(password);
             query += ', password = ?';
-            queryParams.push(password);
+            queryParams.push(hashed);
         }
         query += ' WHERE id = ?';
         queryParams.push(id);
@@ -25,10 +26,7 @@ export async function PUT(
         return NextResponse.json({ success: true });
     } catch (err) {
         console.error('Update user error:', err);
-        return NextResponse.json(
-            { error: 'Failed to update user' },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
     }
 }
 
@@ -42,9 +40,6 @@ export async function DELETE(
         return NextResponse.json({ success: true });
     } catch (err) {
         console.error('Delete user error:', err);
-        return NextResponse.json(
-            { error: 'Failed to delete user' },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
     }
 }

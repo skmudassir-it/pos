@@ -23,6 +23,7 @@ export default function POSMain() {
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
     const [taxRate, setTaxRate] = useState<number>(0);
+    const [receiptData, setReceiptData] = useState<any>(null);
 
     const [userName, setUserName] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -155,6 +156,8 @@ export default function POSMain() {
     };
 
     const handleLogout = () => {
+        document.cookie = 'pos_token=; Max-Age=0; path=/';
+        localStorage.removeItem('pos_user');
         router.push('/');
     };
 
@@ -190,11 +193,11 @@ export default function POSMain() {
                 body: JSON.stringify(transactionData)
             });
 
-            alert(`Payment Successful via ${paymentMethod.toUpperCase()}! Change due: $${changeDue.toFixed(2)}`);
-
-            setCart([]);
-            setAmountTendered('');
-            setPaymentMethod('cash');
+            setReceiptData({
+                ...transactionData,
+                changeDue,
+                id: Date.now()
+            });
             setIsPaymentModalOpen(false);
         } catch (error) {
             console.error('Failed to record transaction', error);
@@ -493,6 +496,44 @@ export default function POSMain() {
                 )
             }
 
+            {/* Receipt Modal */}
+            {receiptData && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+                    <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+                        <div className="text-center mb-6">
+                            <h2 className="text-2xl font-bold text-gray-800">🧾 Receipt</h2>
+                            <p className="text-sm text-gray-500 mt-1">{receiptData.receiptNo}</p>
+                            <p className="text-sm text-gray-400">{new Date(receiptData.date).toLocaleString()}</p>
+                        </div>
+                        <div className="border-t border-b py-4 mb-4 space-y-2">
+                            {receiptData.items.map((item: any, i: number) => (
+                                <div key={i} className="flex justify-between text-sm">
+                                    <span>{item.name} x{item.quantity}</span>
+                                    <span className="font-medium">${(Number(item.price) * item.quantity).toFixed(2)}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="space-y-1 text-sm">
+                            <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>${receiptData.subtotal.toFixed(2)}</span></div>
+                            <div className="flex justify-between"><span className="text-gray-500">Tax ({receiptData.tax > 0 ? `${((receiptData.tax / receiptData.subtotal) * 100).toFixed(1)}%` : '0%'})</span><span>${receiptData.tax.toFixed(2)}</span></div>
+                            <div className="flex justify-between font-bold text-lg pt-2 border-t"><span>Total</span><span>${receiptData.total.toFixed(2)}</span></div>
+                            <div className="flex justify-between pt-2"><span className="text-gray-500">Method</span><span className="capitalize font-medium">{receiptData.method}</span></div>
+                            {receiptData.method === 'cash' && (
+                                <>
+                                    <div className="flex justify-between"><span className="text-gray-500">Tendered</span><span>${receiptData.amountTendered.toFixed(2)}</span></div>
+                                    <div className="flex justify-between font-semibold text-green-600"><span>Change</span><span>${receiptData.changeDue.toFixed(2)}</span></div>
+                                </>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => { setReceiptData(null); setCart([]); setAmountTendered(''); setPaymentMethod('cash'); }}
+                            className="w-full mt-6 py-3 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                        >
+                            New Sale
+                        </button>
+                    </div>
+                </div>
+            )}
 
         </div >
     );
