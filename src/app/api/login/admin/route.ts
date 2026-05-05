@@ -1,7 +1,27 @@
 import { NextResponse } from 'next/server';
-import pool, { verifyPassword } from '@/lib/db';
+import pool, { verifyPassword, hashPassword } from '@/lib/db';
 import { signToken } from '@/lib/auth';
-import { RowDataPacket } from 'mysql2';
+import { RowDataPacket, ResultSetHeader } from 'mysql2';
+
+async function autoMigratePassword(userId: number, plainPassword: string, storedPassword: string): Promise<boolean> {
+    // Try bcrypt first
+    const bcryptValid = await verifyPassword(plainPassword, storedPassword);
+    if (bcryptValid) return true;
+
+    // Fallback: plaintext comparison for legacy passwords
+    if (plainPassword === storedPassword) {
+        // Auto-upgrade to bcrypt
+        const hashed = await hashPassword(plainPassword);
+        await pool.query<ResultSetHeader>(
+            'UPDATE users SET password = ? WHERE id = ?',
+            [hashed, userId]
+        );
+        console.log(`Auto-migrated password for user #${userId}`);
+        return true;
+    }
+
+    return false;
+}
 
 export async function POST(req: Request) {
     try {
@@ -21,7 +41,7 @@ export async function POST(req: Request) {
         }
 
         const user = rows[0];
-        const valid = await verifyPassword(password, user.password);
+        const valid = await autoMigratePassword(user.id, password, user.password);
         if (!valid) {
             return NextResponse.json(
                 { success: false, message: 'Invalid admin credentials' },
