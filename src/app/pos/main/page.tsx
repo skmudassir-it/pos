@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 
 type Product = {
     id: number;
@@ -36,7 +35,6 @@ export default function POSMain() {
     const [closingTotal, setClosingTotal] = useState(0);
     const [sessionSales, setSessionSales] = useState(0);
 
-    const router = useRouter();
 
     useEffect(() => {
         fetch('/api/products')
@@ -144,8 +142,9 @@ export default function POSMain() {
 
             const data = await res.json();
             if (data.success) {
-                alert(`Register Closed Successfully!\n\nOpening Amount: $${openingAmount.toFixed(2)}\nTotal Counted: $${closingTotal.toFixed(2)}\nTakeout (Profit): $${(closingTotal - openingAmount).toFixed(2)}`);
-                router.push('/');
+                document.cookie = 'pos_token=; Max-Age=0; path=/';
+                localStorage.removeItem('pos_user');
+                window.location.href = '/';
             } else {
                 alert('Failed to close register: ' + data.message);
             }
@@ -158,7 +157,7 @@ export default function POSMain() {
     const handleLogout = () => {
         document.cookie = 'pos_token=; Max-Age=0; path=/';
         localStorage.removeItem('pos_user');
-        router.push('/');
+        window.location.href = '/';
     };
 
     const handlePayment = () => {

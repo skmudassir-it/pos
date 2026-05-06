@@ -1,16 +1,15 @@
 "use client";
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function UserLogin() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const router = useRouter();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError('');
         const res = await fetch('/api/login/user', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -26,9 +25,9 @@ export default function UserLogin() {
             const statusInfo = await statusRes.json();
 
             if (statusInfo.isOpen) {
-                router.push('/pos/main');
+                window.location.href = '/pos/main';
             } else {
-                router.push('/register/open');
+                window.location.href = '/register/open';
             }
         } else {
             setError(data.message);

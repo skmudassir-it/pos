@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 const navItems = [
@@ -14,12 +14,11 @@ const navItems = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
-    const router = useRouter();
     const [mobileOpen, setMobileOpen] = useState(false);
 
     const handleLogout = () => {
         document.cookie = 'pos_token=; Max-Age=0; path=/';
-        router.push('/');
+        window.location.href = '/';
     };
 
     return (

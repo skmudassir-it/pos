@@ -1,16 +1,15 @@
 "use client";
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function AdminLogin() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const router = useRouter();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError('');
         const res = await fetch('/api/login/admin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -18,8 +17,7 @@ export default function AdminLogin() {
         });
         const data = await res.json();
         if (data.success) {
-            alert('Admin Login Successful');
-            router.push('/admin/dashboard');
+            window.location.href = '/admin/dashboard';
         } else {
             setError(data.message);
         }
